@@ -3,8 +3,6 @@ package clustertreecmd
 import (
 	"errors"
 	"fmt"
-	"github.com/disiqueira/gotree"
-	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -40,7 +38,8 @@ func NewClusterTreeCmd(clientFactory internalcmd.ClientFactory) *cobra.Command {
 		fmt.Println(args)
 		//opts.Namespace so use this when package
 		clientL, err := clientFactory.Client()
-		if args.Resource == "ClusterPackage" {
+		switch strings.ToLower(args.Resource) {
+		case "clusterpackage":
 			Package, err := clientL.GetPackage(cmd.Context(), string(args.Name))
 			if err != nil {
 				return err
@@ -50,6 +49,25 @@ func NewClusterTreeCmd(clientFactory internalcmd.ClientFactory) *cobra.Command {
 				return err
 			}
 			fmt.Println(tree)
+
+		case "package":
+			if opts.Namespace == "" {
+				return errors.New("--namespace is required as its a namespaced Resource type")
+			}
+			ns := opts.Namespace
+			Package, err := clientL.GetPackage(cmd.Context(), string(args.Name), internalcmd.WithNamespace(ns))
+
+			if err != nil {
+				return err
+			}
+			tree, err := handlePackage(clientL, Package, cmd)
+			if err != nil {
+				return err
+			}
+			fmt.Println(tree)
+
+		default:
+			return errInvalidResourceType
 		}
 		return nil
 	}
@@ -57,38 +75,7 @@ func NewClusterTreeCmd(clientFactory internalcmd.ClientFactory) *cobra.Command {
 	return cmd
 }
 
-var errRevisionsNotFound = errors.New("revision not found")
-
-func handleClusterPackage(clientL *internalcmd.Client, Package *internalcmd.Package, cmd *cobra.Command) (string, error) {
-
-	fmt.Println("printing the clusterpackage from handlefunc : ", Package.Name())
-	tree := gotree.New(fmt.Sprintf("%s\n%s", Package.Name(), Package.Namespace()))
-	result, err := clientL.GetClusterObjectset(cmd.Context(), Package.Name())
-	if err != nil {
-		return "", err
-	}
-	fmt.Println("the name is ", result.Name, "lets print the phases and resource ")
-
-	for _, phase := range result.Spec.Phases {
-		treePhase := tree.Add("Phase " + phase.Name)
-
-		for _, obj := range phase.Objects {
-			treePhase.Add(
-				fmt.Sprintf("%s %s",
-					obj.Object.GroupVersionKind(),
-					client.ObjectKeyFromObject(&obj.Object)))
-		}
-
-		for _, obj := range phase.ExternalObjects {
-			treePhase.Add(
-				fmt.Sprintf("%s %s (EXTERNAL)",
-					obj.Object.GroupVersionKind(),
-					client.ObjectKeyFromObject(&obj.Object)))
-		}
-	}
-	return tree.Print(), nil
-
-}
+var errInvalidResourceType = errors.New("invalid resource type")
 
 func getArgs(args []string) (*arguments, error) {
 	switch len(args) {
