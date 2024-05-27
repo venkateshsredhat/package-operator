@@ -38,39 +38,18 @@ func NewClusterTreeCmd(clientFactory internalcmd.ClientFactory) *cobra.Command {
 		fmt.Printf("clusterwide is enabled")
 
 		fmt.Println(args)
+		//opts.Namespace so use this when package
 		clientL, err := clientFactory.Client()
 		if args.Resource == "ClusterPackage" {
 			Package, err := clientL.GetPackage(cmd.Context(), string(args.Name))
 			if err != nil {
 				return err
 			}
-
-			fmt.Println("printing the clusterpackage : ", Package.Name())
-			tree := gotree.New(fmt.Sprintf("%s\n%s", Package.Name(), Package.Namespace()))
-			result, err := clientL.GetClusterObjectset(cmd.Context(), Package.Name())
+			tree, err := handleClusterPackage(clientL, Package, cmd)
 			if err != nil {
 				return err
 			}
-			fmt.Println("the name is ", result.Name, "lets print the phases and resource ")
-
-			for _, phase := range result.Spec.Phases {
-				treePhase := tree.Add("Phase " + phase.Name)
-
-				for _, obj := range phase.Objects {
-					treePhase.Add(
-						fmt.Sprintf("%s %s",
-							obj.Object.GroupVersionKind(),
-							client.ObjectKeyFromObject(&obj.Object)))
-				}
-
-				for _, obj := range phase.ExternalObjects {
-					treePhase.Add(
-						fmt.Sprintf("%s %s (EXTERNAL)",
-							obj.Object.GroupVersionKind(),
-							client.ObjectKeyFromObject(&obj.Object)))
-				}
-			}
-			fmt.Println(tree.Print())
+			fmt.Println(tree)
 		}
 		return nil
 	}
@@ -79,6 +58,37 @@ func NewClusterTreeCmd(clientFactory internalcmd.ClientFactory) *cobra.Command {
 }
 
 var errRevisionsNotFound = errors.New("revision not found")
+
+func handleClusterPackage(clientL *internalcmd.Client, Package *internalcmd.Package, cmd *cobra.Command) (string, error) {
+
+	fmt.Println("printing the clusterpackage from handlefunc : ", Package.Name())
+	tree := gotree.New(fmt.Sprintf("%s\n%s", Package.Name(), Package.Namespace()))
+	result, err := clientL.GetClusterObjectset(cmd.Context(), Package.Name())
+	if err != nil {
+		return "", err
+	}
+	fmt.Println("the name is ", result.Name, "lets print the phases and resource ")
+
+	for _, phase := range result.Spec.Phases {
+		treePhase := tree.Add("Phase " + phase.Name)
+
+		for _, obj := range phase.Objects {
+			treePhase.Add(
+				fmt.Sprintf("%s %s",
+					obj.Object.GroupVersionKind(),
+					client.ObjectKeyFromObject(&obj.Object)))
+		}
+
+		for _, obj := range phase.ExternalObjects {
+			treePhase.Add(
+				fmt.Sprintf("%s %s (EXTERNAL)",
+					obj.Object.GroupVersionKind(),
+					client.ObjectKeyFromObject(&obj.Object)))
+		}
+	}
+	return tree.Print(), nil
+
+}
 
 func getArgs(args []string) (*arguments, error) {
 	switch len(args) {
@@ -115,7 +125,6 @@ type arguments struct {
 
 type options struct {
 	Namespace string
-	Output    string
 }
 
 func (o *options) AddFlags(flags *pflag.FlagSet) {
@@ -125,12 +134,5 @@ func (o *options) AddFlags(flags *pflag.FlagSet) {
 		"n",
 		o.Namespace,
 		"If present, the namespace scope for this CLI request",
-	)
-	flags.StringVarP(
-		&o.Output,
-		"output",
-		"o",
-		o.Output,
-		"Output format. One of: json|yaml",
 	)
 }
