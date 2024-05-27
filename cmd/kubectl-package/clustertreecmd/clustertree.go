@@ -3,12 +3,12 @@ package clustertreecmd
 import (
 	"errors"
 	"fmt"
+	"github.com/disiqueira/gotree"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"sigs.k8s.io/controller-runtime/pkg/client"
-
 	internalcmd "package-operator.run/internal/cmd"
 )
 
@@ -38,56 +38,39 @@ func NewClusterTreeCmd(clientFactory internalcmd.ClientFactory) *cobra.Command {
 		fmt.Printf("clusterwide is enabled")
 
 		fmt.Println(args)
-		client, err := clientFactory.Client()
+		clientL, err := clientFactory.Client()
 		if args.Resource == "ClusterPackage" {
-			Package, err := client.GetPackage(cmd.Context(), string(args.Name))
+			Package, err := clientL.GetPackage(cmd.Context(), string(args.Name))
 			if err != nil {
 				return err
 			}
 
-			fmt.Println("printing the clusterpackage")
-			fmt.Println(Package.Name())
+			fmt.Println("printing the clusterpackage : ", Package.Name())
+			tree := gotree.New(fmt.Sprintf("%s\n%s", Package.Name(), Package.Namespace()))
+			result, err := clientL.GetClusterObjectset(cmd.Context(), Package.Name())
+			if err != nil {
+				return err
+			}
+			fmt.Println("the name is ", result.Name, "lets print the phases and resource ")
 
-			result, err := client.GetClusterObjectset(cmd.Context(), Package.Name())
-			/*
-				tree := gotree.New(header)
+			for _, phase := range result.Spec.Phases {
+				treePhase := tree.Add("Phase " + phase.Name)
 
-				for _, phase := range spec.Phases {
-					treePhase := tree.Add("Phase " + phase.Name)
+				for _, obj := range phase.Objects {
+					treePhase.Add(
+						fmt.Sprintf("%s %s",
+							obj.Object.GroupVersionKind(),
+							client.ObjectKeyFromObject(&obj.Object)))
+				}
 
-					for _, obj := range phase.Objects {
-						treePhase.Add(
-							fmt.Sprintf("%s %s",
-								obj.Object.GroupVersionKind(),
-								client.ObjectKeyFromObject(&obj.Object)))
-					}
-
-					for _, obj := range phase.ExternalObjects {
-						treePhase.Add(
-							fmt.Sprintf("%s %s (EXTERNAL)",
-								obj.Object.GroupVersionKind(),
-								client.ObjectKeyFromObject(&obj.Object)))
-					}
-
-			*/
-			if result != nil {
-				fmt.Println("the name is ", result.Name, "lets print the phases and resource ")
-
-				for i, v := range result.Spec.Phases {
-					fmt.Println("Phases ", i, v.Name)
-					//var resul v1alpha1.ObjectSetTemplatePhase
-					for resul := range v.Objects {
-						fmt.Println(resul)
-					}
-
+				for _, obj := range phase.ExternalObjects {
+					treePhase.Add(
+						fmt.Sprintf("%s %s (EXTERNAL)",
+							obj.Object.GroupVersionKind(),
+							client.ObjectKeyFromObject(&obj.Object)))
 				}
 			}
-		} else {
-			fmt.Println(err)
-		}
-
-		if err != nil {
-			return err
+			fmt.Println(tree.Print())
 		}
 		return nil
 	}
@@ -133,12 +116,6 @@ type arguments struct {
 type options struct {
 	Namespace string
 	Output    string
-	Revision  int64
-}
-
-type Package struct {
-	client client.Client
-	obj    client.Object
 }
 
 func (o *options) AddFlags(flags *pflag.FlagSet) {
@@ -155,11 +132,5 @@ func (o *options) AddFlags(flags *pflag.FlagSet) {
 		"o",
 		o.Output,
 		"Output format. One of: json|yaml",
-	)
-	flags.Int64Var(
-		&o.Revision,
-		"revision",
-		o.Revision,
-		"See the details, including object set of the revision specified",
 	)
 }
