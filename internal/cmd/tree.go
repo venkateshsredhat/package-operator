@@ -208,6 +208,7 @@ func newTreeFromSpec(header string, spec v1alpha1.ObjectSetTemplateSpec) gotree.
 
 		for _, obj := range phase.Objects {
 			treePhase.Add(
+
 				fmt.Sprintf("%s %s",
 					obj.Object.GroupVersionKind(),
 					client.ObjectKeyFromObject(&obj.Object)))

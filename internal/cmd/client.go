@@ -26,6 +26,35 @@ type Client struct {
 	client client.Client
 }
 
+func (c *Client) GetClusterObjectset(ctx context.Context, name string, opts ...GetPackageOption) (*corev1alpha1.ClusterObjectSet, error) {
+	obj := &corev1alpha1.ClusterPackage{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "",
+		},
+	}
+	objreslist := &corev1alpha1.ClusterObjectSetList{}
+	if err := c.client.List(ctx, objreslist); err != nil {
+		return nil, fmt.Errorf("getting package objectsetlist : %w", err)
+	}
+	for i := range objreslist.Items {
+		fmt.Println("the objectset items are : ", objreslist.Items[i].Name, objreslist.Items[i].Status.Phase)
+		//skip the Archived status
+		if objreslist.Items[i].Status.Phase == "Available" {
+			obj = &corev1alpha1.ClusterPackage{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: objreslist.Items[i].Name,
+				},
+			}
+
+		}
+	}
+	objres := &corev1alpha1.ClusterObjectSet{}
+	if err := c.client.Get(ctx, client.ObjectKeyFromObject(obj), objres); err != nil {
+		return nil, fmt.Errorf("getting package objectet: %w", err)
+	}
+	return objres, nil
+}
+
 func (c *Client) GetPackage(ctx context.Context, name string, opts ...GetPackageOption) (*Package, error) {
 	var cfg GetPackageConfig
 
